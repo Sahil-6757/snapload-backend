@@ -38,9 +38,9 @@ try {
         console.log('Local yt-dlp binary download completed successfully.')
       })
       .catch(err => {
-        console.error('Failed to download yt-dlp binary from GitHub:', err)
-        throw err
+        console.error('Failed to download yt-dlp binary from GitHub:', err.message || err)
       })
+
     ytDlpBinaryPath = localPath
   }
 }
