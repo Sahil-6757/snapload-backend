@@ -1,10 +1,51 @@
 const express = require('express')
 const path = require('path')
 const fs = require('fs')
+const os = require('os')
+const { execSync } = require('child_process')
 const YTDlpWrap = require('yt-dlp-wrap').default
+const ffmpegStatic = require('ffmpeg-static')
 
 const router = express.Router()
-const ytDlp = new YTDlpWrap('yt-dlp')
+
+let ytDlpBinaryPath = 'yt-dlp'
+let initPromise = Promise.resolve()
+
+try {
+  execSync('yt-dlp --version')
+  console.log('Using global yt-dlp binary.')
+} catch (e) {
+  const binDir = path.join(__dirname, '../../bin')
+  if (!fs.existsSync(binDir)) {
+    fs.mkdirSync(binDir, { recursive: true })
+  }
+
+  const binaryName = os.platform() === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
+  const localPath = path.join(binDir, binaryName)
+
+  if (fs.existsSync(localPath)) {
+    ytDlpBinaryPath = localPath
+    console.log(`Using existing local yt-dlp binary at: ${ytDlpBinaryPath}`)
+  } else {
+    console.log(`Global yt-dlp not found. Downloading to local path: ${localPath}...`)
+    initPromise = YTDlpWrap.downloadFromGithub(localPath)
+      .then(() => {
+        try {
+          fs.chmodSync(localPath, '755')
+        } catch (chmodErr) {
+          // Ignore permission changes on Windows
+        }
+        console.log('Local yt-dlp binary download completed successfully.')
+      })
+      .catch(err => {
+        console.error('Failed to download yt-dlp binary from GitHub:', err)
+        throw err
+      })
+    ytDlpBinaryPath = localPath
+  }
+}
+
+const ytDlp = new YTDlpWrap(ytDlpBinaryPath)
 
 // Store progress of active downloads
 const activeDownloads = new Map()
@@ -31,6 +72,7 @@ router.get('/progress/:id', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
   res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
 
   const id = req.params.id
 
@@ -52,6 +94,7 @@ router.get('/progress/:id', (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
+    await initPromise
     const { url } = req.body
     const downloadId = Date.now().toString()
 
@@ -74,6 +117,8 @@ router.post('/', async (req, res) => {
       'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/best',
       '--merge-output-format',
       'mp4',
+      '--ffmpeg-location',
+      ffmpegStatic,
       '--postprocessor-args',
       'ffmpeg:-c copy',
       '--no-playlist',
@@ -82,8 +127,12 @@ router.post('/', async (req, res) => {
       '--no-cache-dir',
       '--no-mtime',
       '--no-continue',
+      '--throttled-rate',
+      '100K',
       '--concurrent-fragments',
-      '5',
+      '12',
+      '--downloader-args',
+      'ffmpeg_i:-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
       '-o',
       outputPath,
     ]
