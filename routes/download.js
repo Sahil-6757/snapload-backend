@@ -5,10 +5,46 @@ const os = require('os')
 const { execSync } = require('child_process')
 const YTDlpWrap = require('yt-dlp-wrap').default
 const ffmpegStatic = require('ffmpeg-static')
+const https = require('https')
 
 const router = express.Router()
 
 const appRoot = path.join(__dirname, '..')
+
+// Custom direct downloader to follow redirects and bypass GitHub API rate limit
+function downloadFile(url, dest) {
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(dest)
+    
+    const request = (targetUrl) => {
+      https.get(targetUrl, (response) => {
+        if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+          // Follow redirect
+          request(response.headers.location)
+          return
+        }
+        
+        if (response.statusCode !== 200) {
+          reject(new Error(`Failed to download: Status Code ${response.statusCode}`))
+          return
+        }
+        
+        response.pipe(file)
+        
+        file.on('finish', () => {
+          file.close()
+          resolve()
+        })
+      }).on('error', (err) => {
+        fs.unlink(dest, () => {})
+        reject(err)
+      })
+    }
+    
+    request(url)
+  })
+}
+
 let ytDlpBinaryPath = 'yt-dlp'
 let initPromise = Promise.resolve()
 
@@ -29,7 +65,8 @@ try {
     console.log(`Using existing local yt-dlp binary at: ${ytDlpBinaryPath}`)
   } else {
     console.log(`Global yt-dlp not found. Downloading to local path: ${localPath}...`)
-    initPromise = YTDlpWrap.downloadFromGithub(localPath)
+    const downloadUrl = `https://github.com/yt-dlp/yt-dlp/releases/latest/download/${binaryName}`
+    initPromise = downloadFile(downloadUrl, localPath)
       .then(() => {
         try {
           fs.chmodSync(localPath, '755')
