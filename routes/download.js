@@ -8,6 +8,7 @@ const ffmpegStatic = require('ffmpeg-static')
 
 const router = express.Router()
 
+const appRoot = path.join(__dirname, '..')
 let ytDlpBinaryPath = 'yt-dlp'
 let initPromise = Promise.resolve()
 
@@ -15,7 +16,7 @@ try {
   execSync('yt-dlp --version')
   console.log('Using global yt-dlp binary.')
 } catch (e) {
-  const binDir = path.join(__dirname, '../../bin')
+  const binDir = path.join(appRoot, 'bin')
   if (!fs.existsSync(binDir)) {
     fs.mkdirSync(binDir, { recursive: true })
   }
@@ -51,7 +52,7 @@ const ytDlp = new YTDlpWrap(ytDlpBinaryPath)
 const activeDownloads = new Map()
 
 // Clean up any legacy or leftover downloads on startup
-const downloadsDir = path.join(__dirname, '../../downloads')
+const downloadsDir = path.join(appRoot, 'downloads')
 if (fs.existsSync(downloadsDir)) {
   fs.readdir(downloadsDir, (err, files) => {
     if (!err && files) {
@@ -103,7 +104,7 @@ router.post('/', async (req, res) => {
     }
 
     // Move downloads outside the server root to avoid nodemon interference
-    const downloadsDir = path.join(__dirname, '../../downloads')
+    const downloadsDir = path.join(appRoot, 'downloads')
     if (!fs.existsSync(downloadsDir)) {
       fs.mkdirSync(downloadsDir, { recursive: true })
     }
@@ -181,7 +182,7 @@ router.post('/', async (req, res) => {
 router.get('/file/:id', (req, res) => {
   const id = req.params.id
   const filename = `snapload-${id}.mp4`
-  const outputPath = path.join(__dirname, '../../downloads', filename)
+  const outputPath = path.join(appRoot, 'downloads', filename)
 
   console.log(`Client requested file download for ID: ${id}`)
   console.log(`Looking for file at: ${outputPath}`)

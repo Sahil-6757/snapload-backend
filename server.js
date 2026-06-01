@@ -5,6 +5,7 @@ const downloadRoute = require('./routes/download')
 const app = express()
 
 app.use(cors())
+
 app.use(express.json())
 
 app.use('/api/download', downloadRoute)
