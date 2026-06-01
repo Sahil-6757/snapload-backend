@@ -171,6 +171,10 @@ router.post('/', async (req, res) => {
       '12',
       '--downloader-args',
       'ffmpeg_i:-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+      '--js-runtimes',
+      `node:${process.execPath}`,
+      '--extractor-args',
+      'youtube:player_client=android,web',
       '-o',
       outputPath,
     ]
