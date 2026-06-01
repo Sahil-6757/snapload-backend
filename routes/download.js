@@ -142,6 +142,16 @@ router.post('/', async (req, res) => {
 
     const process = ytDlp.exec(args)
 
+    if (process.ytDlpProcess) {
+      process.ytDlpProcess.stdout.on('data', (data) => {
+        console.log(`[yt-dlp stdout ${downloadId}]: ${data.toString().trim()}`)
+      })
+
+      process.ytDlpProcess.stderr.on('data', (data) => {
+        console.error(`[yt-dlp stderr ${downloadId}]: ${data.toString().trim()}`)
+      })
+    }
+
     // Send the ID back to the client immediately
     res.json({ downloadId })
 
